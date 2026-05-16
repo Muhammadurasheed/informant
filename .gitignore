@@ -1,0 +1,45 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Security
+*.json
+!package.json
+!tsconfig.json
+.env
+*.env
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Internal project files (not for GitHub)
+script.txt
+real-script.txt
+ss-details.md
+hackathon.txt
+backend/devdash.md
+backend/backendlog.md
+env.yaml
+prepare_deploy_env.py
+inspect_*.py
+audit_*.py
+surgical_*.py
+
