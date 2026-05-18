@@ -39,7 +39,13 @@ When you ask a question about your browsing history, Informant doesn't just synt
 
 ## 🎥 The Architecture of Memory: How We Used VideoDB
 
-At the center of Informant lies **VideoDB**. While traditional databases are built for static rows or text embeddings, Informant requires a data store that treats video as a first-class, indexable, and queryable asset. VideoDB serves as the core infrastructure that converts raw screen recordings into structured, searchable browsing memories.
+Let’s be entirely blunt: **VideoDB is the absolute beating heart and lifeline of Informant. There are no mock databases, no fragile page-scraping fallbacks, and no smoke-and-mirror shortcuts.** If VideoDB were disabled, Informant would cease to function entirely. 
+
+While traditional databases are built for static rows or flat text embeddings, Informant requires a data store that treats video as a first-class, indexable, and queryable asset. VideoDB is our core infrastructure, powering three critical, real-time pipelines:
+
+1. **Self-Healing Stream Ingestion:** When you stop a session (`Ctrl + Shift + X`), our backend directly formats and uploads your screen frames directly to VideoDB’s servers via the official Python SDK (`self.collection.upload`).
+2. **Dual-Index Alignment:** Once uploaded, the backend explicitly requests VideoDB’s servers to parse and build aligned multimodal indexes: the visual track (`video.index_visuals`) and the spoken audio track (`video.index_spoken_words`).
+3. **Playback-Cued Evidence Retrieval:** When you query a memory (e.g., *"What was the DIV Fund deadline?"*), the backend runs a bimodal search query directly against your VideoDB index (`self.collection.get_videos` and `video.search`). Most importantly, the video player in the side panel is powered by VideoDB's HLS streaming URL, playing the video stream starting **precisely at the millisecond the search engine cited**!
 
 ```
 ┌──────────────────────────┐      WebM Chunks      ┌──────────────────────────┐
