@@ -56,6 +56,9 @@ export default function App() {
     const speechTranscriptRef = useRef<string>('');
     const speechDebounceTimerRef = useRef<any>(null);
 
+    // Speech states
+    const [isSpeaking, setIsSpeaking] = useState(false);
+
     // Smart Browsing History state
     const [historyItems, setHistoryItems] = useState<any[]>([]);
     const [loadingHistory, setLoadingHistory] = useState(false);
@@ -165,6 +168,7 @@ export default function App() {
     }, []);
 
     const handleLogout = () => {
+        stopSpeaking();
         chrome.storage.local.clear(() => {
             setAuthToken(null);
             setUserProfile(null);
@@ -311,6 +315,8 @@ export default function App() {
 
     const submitMessage = async (msgText: string) => {
         if (!msgText.trim() || !authToken) return;
+        
+        stopSpeaking();
 
         const userMsg: Message = { id: Date.now().toString(), role: 'user', text: msgText };
         setMessages(prev => [...prev, userMsg]);
@@ -468,11 +474,24 @@ export default function App() {
     const speakText = (text: string) => {
         if (!window.speechSynthesis) return;
         window.speechSynthesis.cancel();
+        setIsSpeaking(false);
+
         const cleanText = text.replace(/[*#_`]/g, '');
         const utterance = new SpeechSynthesisUtterance(cleanText);
         utterance.rate = 1.0;
         utterance.pitch = 1.0;
+
+        utterance.onstart = () => setIsSpeaking(true);
+        utterance.onend = () => setIsSpeaking(false);
+        utterance.onerror = () => setIsSpeaking(false);
+
         window.speechSynthesis.speak(utterance);
+    };
+
+    const stopSpeaking = () => {
+        if (!window.speechSynthesis) return;
+        window.speechSynthesis.cancel();
+        setIsSpeaking(false);
     };
 
     if (!authToken) {
@@ -570,6 +589,15 @@ export default function App() {
                 </div>
                 
                 <div className="flex items-center gap-2">
+                    {isSpeaking && (
+                        <button
+                            onClick={stopSpeaking}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-widest bg-red-500/15 text-red-400 border border-red-500/25 hover:bg-red-500/25 transition-all shadow-[0_0_12px_rgba(239,68,68,0.15)] animate-pulse"
+                            title="Stop voice playback"
+                        >
+                            <VolumeX className="w-3.5 h-3.5" /> Stop Speech
+                        </button>
+                    )}
                     <button
                         onClick={toggleRecording}
                         disabled={loading}
