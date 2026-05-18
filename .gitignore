@@ -49,7 +49,7 @@ surgical_*.py
 # Ignore all markdown documentation except README and TESTING_GUIDE
 *.md
 !README.md
-!extension/TESTING_GUIDE.md
+!TESTING_GUIDE.md
 
 capture_sessions/
 backend/capture_sessions/
