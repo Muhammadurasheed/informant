@@ -37,6 +37,10 @@ ss-details.md
 hackathon.txt
 backend/devdash.md
 backend/backendlog.md
+backendlog.md
+google_signin_error.md
+bash.exe.stackdump
+frontend_build_args.txt
 env.yaml
 prepare_deploy_env.py
 inspect_*.py
@@ -44,4 +48,5 @@ audit_*.py
 surgical_*.py
 capture_sessions/
 backend/capture_sessions/
+extension/debug_build/
 
