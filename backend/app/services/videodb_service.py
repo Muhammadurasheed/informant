@@ -315,11 +315,24 @@ class VideoDBService:
             chunk_name = f"informant_{session_id}_chunk{chunk_index:04d}"
 
             def do_upload():
-                return self.collection.upload(
-                    file_path=upload_file_path,
-                    media_type="video",
-                    name=chunk_name
-                )
+                import time
+                max_retries = 3
+                for attempt in range(max_retries):
+                    try:
+                        return self.collection.upload(
+                            file_path=upload_file_path,
+                            media_type="video",
+                            name=chunk_name
+                        )
+                    except Exception as upload_err:
+                        logger.warning(
+                            "VideoDB: Upload attempt failed",
+                            attempt=attempt+1,
+                            error=str(upload_err)
+                        )
+                        if attempt == max_retries - 1:
+                            raise upload_err
+                        time.sleep(2 * (attempt + 1))
 
             video = await loop.run_in_executor(None, do_upload)
 
@@ -345,7 +358,21 @@ class VideoDBService:
             )
 
             def do_index_visuals():
-                video.index_visuals(prompt=visual_prompt)
+                import time
+                max_retries = 3
+                for attempt in range(max_retries):
+                    try:
+                        video.index_visuals(prompt=visual_prompt)
+                        return
+                    except Exception as index_err:
+                        logger.warning(
+                            "VideoDB: Visual indexing attempt failed",
+                            attempt=attempt+1,
+                            error=str(index_err)
+                        )
+                        if attempt == max_retries - 1:
+                            raise index_err
+                        time.sleep(2 * (attempt + 1))
 
             await loop.run_in_executor(None, do_index_visuals)
             logger.info("VideoDB: Visual indexing completed ✓", video_id=video.id)
