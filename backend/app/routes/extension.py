@@ -8,6 +8,7 @@ from typing import Dict, List, Any, Optional
 # pyrefly: ignore [missing-import]
 import structlog
 import json
+import os
 # pyrefly: ignore [missing-import]
 from pydantic import BaseModel
 
@@ -265,12 +266,14 @@ async def get_browsing_history(
                 try:
                     session_id = vid_name.split("_chunk")[0].replace("informant_", "")
                     meta_path = os.path.join("capture_sessions", user_id, session_id, "metadata.json")
+                    logger.info("Checking history meta_path", meta_path=meta_path, exists=os.path.exists(meta_path))
                     if os.path.exists(meta_path):
                         with open(meta_path, "r") as f:
                             meta_data = json.load(f)
                             if meta_data.get("summary") and meta_data["summary"].strip():
                                 summary = meta_data["summary"].strip()
-                except Exception:
+                except Exception as e:
+                    logger.error("Failed to read metadata in history timeline", error=str(e))
                     pass
 
                 history_items.append({
