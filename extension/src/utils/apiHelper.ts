@@ -1,7 +1,7 @@
 import { isExtensionValid } from '../config';
 
 /**
- * Unified API Helper for ScholarStream Co-Pilot
+ * Unified API Helper for Informant
  * Handles CORS and Auth by proxying requests through the Background Script when needed.
  */
 

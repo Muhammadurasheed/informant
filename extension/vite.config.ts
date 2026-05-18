@@ -41,10 +41,11 @@ export default defineConfig(({ mode }) => {
           sidepanel: resolve(__dirname, 'sidepanel.html'),
           background: resolve(__dirname, 'src/background/index.ts'),
           content: resolve(__dirname, 'src/content/index.ts'),
+          offscreen: resolve(__dirname, 'offscreen.html'),
         },
         output: {
           entryFileNames: (chunkInfo) => {
-            if (['background', 'content', 'sidepanel'].includes(chunkInfo.name)) {
+            if (['background', 'content', 'sidepanel', 'offscreen'].includes(chunkInfo.name)) {
               return '[name].js';
             }
             return 'assets/[name]-[hash].js';

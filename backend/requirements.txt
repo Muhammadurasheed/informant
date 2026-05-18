@@ -1,0 +1,28 @@
+# Informant Backend Dependencies
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+websockets>=11.0.3
+pydantic==2.10.3
+pydantic-settings==2.6.1
+
+# Firebase
+firebase-admin==6.6.0
+google-cloud-firestore==2.19.0
+
+# AI (Gemini)
+google-generativeai==0.8.3
+
+# Memory (VideoDB)
+videodb==0.4.0
+
+# Document Parsing
+PyPDF2==3.0.1
+python-docx==1.1.2
+aiofiles==23.2.1
+
+# Utilities
+httpx==0.28.1
+python-dotenv==1.0.1
+structlog==24.4.0
+python-dateutil==2.9.0
+pytz==2024.2

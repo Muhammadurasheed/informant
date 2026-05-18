@@ -1,10 +1,15 @@
 let mediaRecorder;
 let recordedChunks = [];
+let currentSessionId = null;
+let currentToken = null;
+let currentApiUrl = null;
 
 chrome.runtime.onMessage.addListener(async (message) => {
   if (message.target !== 'offscreen') return;
 
   if (message.type === 'START_RECORDING') {
+    currentToken = message.token;
+    currentApiUrl = message.apiUrl;
     startRecording(message.streamId, message.sessionId);
   } else if (message.type === 'STOP_RECORDING') {
     stopRecording();
@@ -34,27 +39,65 @@ async function startRecording(streamId, sessionId) {
         mimeType: 'video/webm;codecs=vp9'
     });
 
+    currentSessionId = sessionId;
+    recordedChunks = [];
+
     mediaRecorder.ondataavailable = (event) => {
       if (event.data.size > 0) {
-        // Send chunk to background script
-        const reader = new FileReader();
-        reader.onload = () => {
-            chrome.runtime.sendMessage({
-                type: 'RECORDING_CHUNK',
-                chunk: reader.result,
-                sessionId: sessionId
-            });
-        };
-        reader.readAsDataURL(event.data);
+        recordedChunks.push(event.data);
+        // Send a lightweight signal to tick up the UI counter!
+        chrome.runtime.sendMessage({
+            type: 'CHUNK_ACQUIRED',
+            chunkIndex: recordedChunks.length
+        });
       }
     };
 
-    mediaRecorder.onstop = () => {
+    mediaRecorder.onstop = async () => {
       stream.getTracks().forEach((track) => track.stop());
+      
+      const blob = new Blob(recordedChunks, { type: 'video/webm;codecs=vp9' });
+      
+      if (currentToken && currentApiUrl && currentSessionId) {
+        console.log("[Informant Offscreen] Initiating direct upload. Size:", blob.size);
+        try {
+          const formData = new FormData();
+          formData.append('file', blob, `chunk_${Date.now()}.webm`);
+          formData.append('session_id', currentSessionId);
+
+          const response = await fetch(`${currentApiUrl}/api/extension/upload-chunk`, {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${currentToken}` },
+              body: formData
+          });
+
+          if (response.ok) {
+              const data = await response.json();
+              console.log("[Informant Offscreen] Direct upload successful:", data);
+              // Notify background/sidepanel that chunk is successfully indexed
+              chrome.runtime.sendMessage({
+                  type: 'CHUNK_INDEXED',
+                  chunkIndex: data.chunk_index,
+                  indexed: data.indexed
+              });
+          } else {
+              console.error("[Informant Offscreen] Upload failed with status:", response.status);
+          }
+        } catch (uploadErr) {
+          console.error("[Informant Offscreen] Direct upload error:", uploadErr);
+        }
+      } else {
+        console.warn("[Informant Offscreen] Missing token, API URL or Session ID, skipping direct upload");
+      }
+
       mediaRecorder = null;
+      recordedChunks = [];
+      currentSessionId = null;
+      currentToken = null;
+      currentApiUrl = null;
     };
 
-    // Record in 5-second chunks
+    // Record continuously but fire ondataavailable every 5 seconds to tick the UI counter
     mediaRecorder.start(5000);
     console.log("Recording started in offscreen doc");
 

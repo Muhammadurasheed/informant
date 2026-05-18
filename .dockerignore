@@ -1,0 +1,11 @@
+node_modules
+dist
+build
+.git
+.env
+.env.*
+backend/.env
+backend/__pycache__
+backend/venv
+coverage
+.DS_Store

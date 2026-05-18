@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, setPersistence, indexedDBLocalPersistence } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
 const validateFirebaseConfig = () => {
@@ -42,8 +42,12 @@ let initError: Error | null = null;
 try {
   app = initializeApp(firebaseConfig);
   auth = getAuth(app);
+  
+  // Set persistence to indexedDB for extension stability
+  setPersistence(auth, indexedDBLocalPersistence);
+  
   db = getFirestore(app);
-  console.log("[Firebase Init] Successfully initialized!");
+  console.log("[Firebase Init] Successfully initialized with IndexedDB persistence!");
 } catch (error: any) {
   console.error("[Firebase Init] CRITICAL FAILURE:", error);
   initError = error;
