@@ -278,10 +278,28 @@ async function startCapture(sessionId: string) {
         chrome.tabs.query({}, (allTabs) => {
             allTabs.forEach(t => {
                 if (t.id) {
-                    chrome.tabs.sendMessage(t.id, { type: 'SHOW_RECORDING_BADGE' }).catch(() => {});
+                    safeShowBadge(t.id, t.url);
                 }
             });
         });
+    });
+}
+
+async function safeShowBadge(tabId: number, tabUrl?: string) {
+    if (tabUrl && (tabUrl.startsWith('chrome://') || tabUrl.startsWith('edge://') || tabUrl.startsWith('about:'))) return;
+    
+    chrome.tabs.sendMessage(tabId, { type: 'SHOW_RECORDING_BADGE' }).catch(async () => {
+        try {
+            await chrome.scripting.executeScript({
+                target: { tabId },
+                files: ['content.js']
+            });
+            setTimeout(() => {
+                chrome.tabs.sendMessage(tabId, { type: 'SHOW_RECORDING_BADGE' }).catch(() => {});
+            }, 150);
+        } catch (e) {
+            console.debug('[Informant BG] Could not auto-inject content.js in tab', tabId, e);
+        }
     });
 }
 
@@ -383,13 +401,16 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     // For SPAs, changeInfo.status might not become 'complete' on every navigation.
     if (isCapturing && tab.active && (changeInfo.status === 'complete' || changeInfo.url)) {
         console.log('[Informant BG] Tab updated/navigated during capture, re-signaling badge');
-        chrome.tabs.sendMessage(tabId, { type: 'SHOW_RECORDING_BADGE' }).catch(() => {});
+        safeShowBadge(tabId, tab.url);
     }
 });
 
 chrome.tabs.onActivated.addListener(({ tabId }) => {
     if (isCapturing) {
-        chrome.tabs.sendMessage(tabId, { type: 'SHOW_RECORDING_BADGE' }).catch(() => {});
+        chrome.tabs.get(tabId, (tab) => {
+            if (chrome.runtime.lastError || !tab) return;
+            safeShowBadge(tabId, tab.url);
+        });
     }
 });
 
