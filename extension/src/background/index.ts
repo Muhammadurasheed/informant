@@ -13,6 +13,7 @@ let currentAuthToken: string | null = null;
 let activeSessionId: string | null = null;
 let isCapturing = false;
 let indexingPollTimer: ReturnType<typeof setTimeout> | null = null;
+let visitedPagesDuringSession: string[] = [];
 
 // ========== Init ==========
 
@@ -30,6 +31,17 @@ chrome.runtime.onStartup.addListener(() => {
 chrome.sidePanel
     .setPanelBehavior({ openPanelOnActionClick: true })
     .catch((err) => console.error('[Informant BG] Side panel error:', err));
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    if (isCapturing && tab.status === 'complete' && tab.title && tab.url && !tab.url.startsWith('chrome://')) {
+        let hostname = '';
+        try { hostname = new URL(tab.url).hostname; } catch(e) {}
+        const entry = `${tab.title}${hostname ? ` (${hostname})` : ''}`;
+        if (!visitedPagesDuringSession.includes(entry) && entry.trim()) {
+            visitedPagesDuringSession.push(entry);
+        }
+    }
+});
 
 
 // ========== Message Router ==========
@@ -86,7 +98,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 const token = result.authToken || currentAuthToken;
                 fetch(`${API_URL}/api/extension/stop-session`, {
                     method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    headers: { 
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ visited_pages: visitedPagesDuringSession })
                 }).then(() => {
                     chrome.runtime.sendMessage({
                         type: 'INDEXING_STARTED',
@@ -213,6 +229,8 @@ async function updateActionBadge(active: boolean) {
 async function startCapture(sessionId: string) {
     if (isCapturing) return;
 
+    visitedPagesDuringSession = [];
+
     if (!currentAuthToken) {
         const stored = await chrome.storage.local.get(['authToken']);
         if (stored.authToken) currentAuthToken = stored.authToken;
@@ -228,6 +246,13 @@ async function startCapture(sessionId: string) {
     const tab = tabs[0];
 
     if (!tab?.id) throw new Error('No active tab found');
+
+    if (tab.title && tab.url && !tab.url.startsWith('chrome://')) {
+        let hostname = '';
+        try { hostname = new URL(tab.url).hostname; } catch(e) {}
+        const entry = `${tab.title}${hostname ? ` (${hostname})` : ''}`;
+        visitedPagesDuringSession.push(entry);
+    }
 
     // @ts-ignore
     chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id }, (streamId) => {

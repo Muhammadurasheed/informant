@@ -3,7 +3,7 @@ Informant API Routes
 Chrome Extension endpoints for session management, memory search, and chat
 """
 # pyrefly: ignore [missing-import]
-from fastapi import APIRouter, HTTPException, Depends, Header, File, UploadFile, Form, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Depends, Header, File, UploadFile, Form, BackgroundTasks, Request
 from typing import Dict, List, Any, Optional
 # pyrefly: ignore [missing-import]
 import structlog
@@ -85,6 +85,7 @@ async def start_capture_session(
 @router.post("/stop-session")
 async def stop_capture_session(
     background_tasks: BackgroundTasks,
+    request: Request,
     authorization: Optional[str] = Header(None)
 ):
     """
@@ -92,8 +93,15 @@ async def stop_capture_session(
     Immediately returns — upload+index runs as a background task.
     """
     user_id = await verify_token(authorization)
+    visited_pages = []
+    try:
+        body = await request.json()
+        if isinstance(body, dict):
+            visited_pages = body.get("visited_pages", [])
+    except Exception:
+        pass
 
-    result = videodb_service.stop_session(user_id=user_id)
+    result = videodb_service.stop_session(user_id=user_id, visited_pages=visited_pages)
 
     if result.get("success"):
         # Fire upload+index in the background — client polls /session-status
@@ -254,11 +262,16 @@ async def get_browsing_history(
                     "AI-captured browsing session recording. Fully indexed across visual scenes "
                     "and audio for instant natural-language recall."
                 )
-                if 'HRuWWYEM' in vid_name or timestamp == 1779061893:
-                    summary = (
-                        "User browsed the VideoDB Global Online Hackathon platform, reviewing submission guidelines, "
-                        "multimodal AI requirements, and submission deadline of May 18, 2026."
-                    )
+                try:
+                    session_id = vid_name.split("_chunk")[0].replace("informant_", "")
+                    meta_path = os.path.join("capture_sessions", user_id, session_id, "metadata.json")
+                    if os.path.exists(meta_path):
+                        with open(meta_path, "r") as f:
+                            meta_data = json.load(f)
+                            if meta_data.get("summary") and meta_data["summary"].strip():
+                                summary = meta_data["summary"].strip()
+                except Exception:
+                    pass
 
                 history_items.append({
                     "id": vid.id,
@@ -286,6 +299,30 @@ async def get_browsing_history(
             "error": str(e),
             "history": []
         }
+
+
+@router.delete("/history/{video_id}")
+async def delete_history_item(
+    video_id: str,
+    authorization: Optional[str] = Header(None)
+):
+    """Delete a browsing history recording from VideoDB"""
+    user_id = await verify_token(authorization)
+    try:
+        if not videodb_service.collection:
+            videodb_service._ensure_connection()
+
+        try:
+            videodb_service.collection.delete_video(video_id)
+        except Exception:
+            vid = videodb_service.collection.get_video(video_id)
+            vid.delete()
+
+        logger.info("Successfully deleted history recording", video_id=video_id, user_id=user_id)
+        return {"success": True}
+    except Exception as e:
+        logger.error("Failed to delete video", video_id=video_id, error=str(e))
+        return {"success": False, "error": str(e)}
 
 
 # ========== Chat (Side Panel Conversation) ==========

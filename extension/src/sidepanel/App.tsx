@@ -28,7 +28,7 @@ export default function App() {
         { 
             id: '1', 
             role: 'assistant', 
-            text: 'Assalamunaleikum! I\'m **Informant** — your AI Browser Co-Pilot.\n\nI see everything you browse and remember it all. Click **▶ Start Session** to give me eyes.' 
+            text: 'Hello! I\'m **Informant**, your AI Browser Co-Pilot.\n\nI see everything you browse and remember it all. Click **▶ Start Session** to give me eyes.' 
         }
     ]);
     const [input, setInput] = useState('');
@@ -54,6 +54,7 @@ export default function App() {
     const [micPermissionNeeded, setMicPermissionNeeded] = useState(false);
     const recognitionRef = useRef<any>(null);
     const speechTranscriptRef = useRef<string>('');
+    const speechDebounceTimerRef = useRef<any>(null);
 
     // Smart Browsing History state
     const [historyItems, setHistoryItems] = useState<any[]>([]);
@@ -241,6 +242,27 @@ export default function App() {
         chrome.storage.local.set({ uploadedDocs: updatedDocs });
     };
 
+    const deleteHistoryItem = async (videoId: string) => {
+        if (!authToken) return;
+        if (!confirm("Are you sure you want to permanently delete this memory session?")) return;
+        
+        try {
+            const response = await fetch(`${ENDPOINTS.history}/${videoId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+            const data = await response.json();
+            if (data.success) {
+                setHistoryItems(prev => prev.filter(item => item.video_id !== videoId));
+            } else {
+                alert("Failed to delete history item: " + (data.error || "Unknown error"));
+            }
+        } catch (err) {
+            console.error("Delete history item error:", err);
+            alert("Failed to delete history item due to network/server error.");
+        }
+    };
+
     const toggleRecording = async () => {
         if (isRecording) {
             setLoading(true);
@@ -352,6 +374,7 @@ export default function App() {
 
     const toggleListening = async () => {
         if (isListening && recognitionRef.current) {
+            if (speechDebounceTimerRef.current) clearTimeout(speechDebounceTimerRef.current);
             recognitionRef.current.stop();
             setIsListening(false);
             return;
@@ -375,20 +398,23 @@ export default function App() {
             }
 
             const recognition = new SpeechRecognition();
-            recognition.continuous = false;
+            recognition.continuous = true;
             recognition.interimResults = true;
             recognition.lang = 'en-US';
 
             recognition.onstart = () => {
                 setIsListening(true);
                 speechTranscriptRef.current = '';
+                if (speechDebounceTimerRef.current) clearTimeout(speechDebounceTimerRef.current);
             };
 
             recognition.onend = () => {
                 setIsListening(false);
-                const finalSpeech = speechTranscriptRef.current;
-                if (finalSpeech && finalSpeech.trim().length > 0) {
-                    console.log("[Informant Voice] Speech ended. Auto-submitting:", finalSpeech);
+                if (speechDebounceTimerRef.current) clearTimeout(speechDebounceTimerRef.current);
+                
+                const finalSpeech = speechTranscriptRef.current.trim();
+                if (finalSpeech.length > 0) {
+                    console.log("[Informant Voice] Speech finished. Submitting:", finalSpeech);
                     submitMessage(finalSpeech);
                 }
             };
@@ -396,14 +422,39 @@ export default function App() {
             recognition.onerror = (e: any) => {
                 console.error("Speech error", e);
                 setIsListening(false);
+                if (speechDebounceTimerRef.current) clearTimeout(speechDebounceTimerRef.current);
             };
 
             recognition.onresult = (event: any) => {
-                const currentTranscript = Array.from(event.results)
-                    .map((res: any) => res[0].transcript)
-                    .join('');
-                setInput(currentTranscript);
-                speechTranscriptRef.current = currentTranscript;
+                let interimTranscript = '';
+                let finalTranscript = '';
+                
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    const transcript = event.results[i][0].transcript;
+                    if (event.results[i].isFinal) {
+                        finalTranscript += transcript;
+                    } else {
+                        interimTranscript += transcript;
+                    }
+                }
+                
+                if (finalTranscript) {
+                    speechTranscriptRef.current = (speechTranscriptRef.current + ' ' + finalTranscript).trim().replace(/\s+/g, ' ');
+                }
+                
+                const displayedText = (speechTranscriptRef.current + ' ' + interimTranscript).trim().replace(/\s+/g, ' ');
+                setInput(displayedText);
+                
+                // Clear any existing silence timer
+                if (speechDebounceTimerRef.current) clearTimeout(speechDebounceTimerRef.current);
+                
+                // If there's some active speech, schedule auto-submit after 2.5 seconds of silence
+                if (displayedText.length > 0) {
+                    speechDebounceTimerRef.current = setTimeout(() => {
+                        console.log("[Informant Voice] 2.5s silence detected. Stopping capture and auto-submitting.");
+                        recognition.stop();
+                    }, 2500);
+                }
             };
 
             recognition.start();
@@ -707,13 +758,22 @@ export default function App() {
                                 {historyItems.map((item) => (
                                     <div key={item.id} className="p-5 rounded-2xl bg-[#151522] border border-white/5 space-y-3 shadow-xl hover:border-white/10 transition-all group">
                                         <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-2.5">
-                                                <div className="w-7 h-7 rounded-lg bg-indigo-500/20 flex items-center justify-center">
+                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                <div className="w-7 h-7 rounded-lg bg-indigo-500/20 flex items-center justify-center flex-shrink-0">
                                                     <Clock className="w-3.5 h-3.5 text-indigo-400" />
                                                 </div>
-                                                <h3 className="text-xs font-bold text-slate-200 group-hover:text-indigo-300 transition-colors">{item.title}</h3>
+                                                <h3 className="text-xs font-bold text-slate-200 group-hover:text-indigo-300 transition-colors truncate">{item.title}</h3>
                                             </div>
-                                            <span className="text-[10px] font-bold text-indigo-400/80 bg-indigo-500/10 px-2.5 py-0.5 rounded-md">{item.duration_str}</span>
+                                            <div className="flex items-center gap-2 flex-shrink-0">
+                                                <span className="text-[10px] font-bold text-indigo-400/80 bg-indigo-500/10 px-2.5 py-0.5 rounded-md">{item.duration_str}</span>
+                                                <button 
+                                                    onClick={() => deleteHistoryItem(item.video_id)}
+                                                    className="p-1 text-slate-500 hover:text-red-400 rounded-lg hover:bg-white/5 transition-colors"
+                                                    title="Delete Session"
+                                                >
+                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
                                         </div>
 
                                         <p className="text-[12px] leading-relaxed text-slate-300">{item.summary}</p>

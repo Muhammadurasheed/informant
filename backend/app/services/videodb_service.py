@@ -15,8 +15,10 @@ import os
 import asyncio
 import aiofiles
 import time
+import json
 from typing import Optional, Dict, Any, List
 from app.config import settings
+from app.services.ai_service import ai_service
 
 logger = structlog.get_logger()
 
@@ -116,7 +118,7 @@ class VideoDBService:
             logger.error("Informant: Chunk save failed", error=str(e))
             return {"success": False, "error": str(e)}
 
-    def stop_session(self, user_id: str) -> Dict[str, Any]:
+    def stop_session(self, user_id: str, visited_pages: Optional[List[str]] = None) -> Dict[str, Any]:
         """Stop an active capture session."""
         session = self.active_sessions.get(user_id)
         if not session:
@@ -124,12 +126,14 @@ class VideoDBService:
 
         session["status"] = "stopped"
         session["stopped_at"] = time.time()
+        session["visited_pages"] = visited_pages or []
         duration = session["stopped_at"] - session["started_at"]
 
         logger.info(
             "Informant: Session stopped",
             session_id=session["session_id"],
             chunks=session["chunk_count"],
+            visited_count=len(session["visited_pages"]),
             duration_secs=round(duration, 1)
         )
 
@@ -196,10 +200,38 @@ class VideoDBService:
         if uploaded_ids:
             session["indexing_status"] = "ready"
             session["indexed_video_id"] = uploaded_ids[0]
+
+            # Generate dynamic AI summary from visited pages
+            summary = "AI-captured browsing session recording. Fully indexed across visual scenes and audio for instant natural-language recall."
+            visited = session.get("visited_pages", [])
+            if visited:
+                try:
+                    prompt = f"Generate a concise, professional 2-sentence summary of what the user browsed based on these visited webpage titles:\n{json.dumps(visited[:15])}\nReturn ONLY the summary text without quotes or preamble."
+                    ai_res = await ai_service.generate_content_async(prompt)
+                    if ai_res and ai_res.strip():
+                        summary = ai_res.strip()
+                except Exception as e:
+                    logger.error("Failed to generate dynamic AI summary", error=str(e))
+
+            session["summary"] = summary
+            try:
+                meta_path = os.path.join(session_dir, "metadata.json")
+                with open(meta_path, "w") as f:
+                    json.dump({
+                        "session_id": session["session_id"],
+                        "visited_pages": visited,
+                        "summary": summary,
+                        "started_at": session["started_at"],
+                        "stopped_at": session.get("stopped_at", time.time())
+                    }, f, indent=2)
+            except Exception as e:
+                logger.error("Failed to write metadata.json", error=str(e))
+
             logger.info(
                 "Informant: Session fully indexed",
                 session_id=session["session_id"],
-                videos_indexed=len(uploaded_ids)
+                videos_indexed=len(uploaded_ids),
+                summary=summary
             )
             return {
                 "success": True,

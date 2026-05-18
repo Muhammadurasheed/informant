@@ -42,4 +42,6 @@ prepare_deploy_env.py
 inspect_*.py
 audit_*.py
 surgical_*.py
+capture_sessions/
+backend/capture_sessions/
 
