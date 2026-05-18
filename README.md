@@ -39,13 +39,7 @@ When you ask a question about your browsing history, Informant doesn't just synt
 
 ## 🎥 The Architecture of Memory: How We Used VideoDB
 
-Let’s be entirely blunt: **VideoDB is the absolute beating heart and lifeline of Informant. There are no mock databases, no fragile page-scraping fallbacks, and no smoke-and-mirror shortcuts.** If VideoDB were disabled, Informant would cease to function entirely. 
-
-While traditional databases are built for static rows or flat text embeddings, Informant requires a data store that treats video as a first-class, indexable, and queryable asset. VideoDB is our core infrastructure, powering three critical, real-time pipelines:
-
-1. **Self-Healing Stream Ingestion:** When you stop a session (`Ctrl + Shift + X`), our backend directly formats and uploads your screen frames directly to VideoDB’s servers via the official Python SDK (`self.collection.upload`).
-2. **Dual-Index Alignment:** Once uploaded, the backend explicitly requests VideoDB’s servers to parse and build aligned multimodal indexes: the visual track (`video.index_visuals`) and the spoken audio track (`video.index_spoken_words`).
-3. **Playback-Cued Evidence Retrieval:** When you query a memory (e.g., *"What was the DIV Fund deadline?"*), the backend runs a bimodal search query directly against your VideoDB index (`self.collection.get_videos` and `video.search`). Most importantly, the video player in the side panel is powered by VideoDB's HLS streaming URL, playing the video stream starting **precisely at the millisecond the search engine cited**!
+While traditional databases are built for static rows or flat text embeddings, Informant requires a data store that treats video as a first-class, indexable, and queryable asset. VideoDB serves as our core memory infrastructure, natively powering three critical pipelines that capture, organize, and retrieve your browsing experiences:
 
 ```
 ┌──────────────────────────┐      WebM Chunks      ┌──────────────────────────┐
@@ -64,19 +58,19 @@ While traditional databases are built for static rows or flat text embeddings, I
 ```
 
 ### 1. Temporal Video Stream Ingestion
-During an active session, Informant captures high-resolution screen frames and system audio. These are saved as temporary WebM chunks. When the user stops a session, these chunks are combined, normalized, and uploaded directly to a VideoDB collection using the Python SDK.
+During an active session, Informant captures high-resolution screen frames and system audio, saving them locally as temporary WebM chunks. When you stop the session (`Ctrl + Shift + X`), the backend automatically normalizes these files and uploads them directly to your VideoDB collection using the Python SDK (`self.collection.upload`).
 
 ### 2. Dual-Index Bimodal Alignment
-Once the video is uploaded to VideoDB, the backend initiates two parallel indexing operations:
-* **The Scene Indexer**: Analyzes the visual content of the screen recording, detecting layout changes, visible text, and UI transitions.
-* **The Spoken Indexer**: Transcribes and indexes the audio track, capturing spoken words, narration, or video audio playing on the tab.
+Once the video is uploaded, the backend initiates two parallel indexing operations on VideoDB's cloud servers:
+* **The Scene Indexer (`video.index_visuals`)**: Analyzes the visual content of your screen recording, detecting layout changes, visible text, and UI transitions to make the entire browser viewport visually searchable.
+* **The Spoken Indexer (`video.index_spoken_words`)**: Transcribes and indexes the audio track, capturing spoken words, narration, or video audio playing on the active tab.
 
 By aligning these visual and auditory indexes on a shared temporal timeline, Informant can search your memory across both sensory dimensions simultaneously.
 
 ### 3. Playback-Cued Evidence Retrieval
-When you ask a question, the backend queries VideoDB using a multimodal search query. VideoDB searches the aligned visual and spoken indexes and returns the matching video segments. 
+When you ask a question (e.g., *"What was the DIV Fund deadline?"*), the backend runs a bimodal search query directly against your VideoDB index (`self.collection.get_videos` and `video.search`). VideoDB searches the aligned visual and spoken indexes and returns the matching video segments.
 
-Instead of forcing you to watch a lengthy video, Informant utilizes VideoDB's dynamic HLS streaming features. It returns the exact start and end timestamps of the relevant visual frame, allowing the side panel to render a playable video stream that starts **precisely at the millisecond the information appeared on your screen**.
+Rather than forcing you to watch a lengthy video, Informant utilizes VideoDB's dynamic HLS streaming features. It returns the exact start and end timestamps of the relevant visual frame, allowing the side panel to render a playable HLS video stream that starts **precisely at the millisecond the information appeared on your screen**!
 
 ---
 
